@@ -7,8 +7,9 @@ interface IMockToken {
 }
 
 contract HundredEmptyMarketRateProtocolMock {
-    address public constant DEFAULT_TOKEN = address(0x0000000000000000000000000000000000002002);
-    address public token = DEFAULT_TOKEN;
+    address public owner;
+    address public emergencyModule;
+    address public token;
     address public attacker;
     bool public paused;
     bool public staged;
@@ -18,9 +19,31 @@ contract HundredEmptyMarketRateProtocolMock {
     uint256 public totalSupply;
     uint256 public exchangeRate;
 
+    error NotOwner();
+    error NotEmergencyModule();
+    error ProtocolPaused();
+
+    constructor(address token_) {
+        owner = msg.sender;
+        token = token_;
+    }
+
+    function setEmergencyModule(address emergencyModule_) external {
+        _claimOwnerIfNeeded();
+        if (msg.sender != owner) revert NotOwner();
+        emergencyModule = emergencyModule_;
+    }
+
+    function setToken(address token_) external {
+        _claimOwnerIfNeeded();
+        if (msg.sender != owner) revert NotOwner();
+        token = token_;
+    }
+
     function seedHealthy(address attacker_) external {
+        _claimOwnerIfNeeded();
+        if (msg.sender != owner) revert NotOwner();
         attacker = attacker_;
-        if (token == address(0)) token = DEFAULT_TOKEN;
         paused = false;
         staged = false;
         cash = 100e18;
@@ -30,11 +53,8 @@ contract HundredEmptyMarketRateProtocolMock {
         exchangeRate = 1e18;
     }
 
-    function setToken(address token_) external {
-        token = token_;
-    }
-
     function stageDonationRateInflation() external {
+        if (paused) revert ProtocolPaused();
         cash = 10_000e18;
         totalBorrows = 0;
         totalReserves = 0;
@@ -44,12 +64,13 @@ contract HundredEmptyMarketRateProtocolMock {
     }
 
     function borrowAgainstInflatedRate() external {
-        require(!paused, "PROTOCOL_PAUSED");
+        if (paused) revert ProtocolPaused();
         require(staged, "EXPLOIT_NOT_STAGED");
         IMockToken(token).mint(attacker, 100e18);
     }
 
-    function pauseAll() external {
+    function emergencyPause() external {
+        if (msg.sender != emergencyModule) revert NotEmergencyModule();
         paused = true;
     }
 
@@ -59,5 +80,9 @@ contract HundredEmptyMarketRateProtocolMock {
 
     function getMetrics() external view returns (uint256, uint256, uint256, uint256, uint256, uint256, bool) {
         return (cash, totalBorrows, totalReserves, totalSupply, exchangeRate, block.number, paused);
+    }
+
+    function _claimOwnerIfNeeded() internal {
+        if (owner == address(0)) owner = msg.sender;
     }
 }

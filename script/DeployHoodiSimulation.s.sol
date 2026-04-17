@@ -5,6 +5,7 @@ import "../src/mocks/MockToken.sol";
 import "../src/mocks/HundredEmptyMarketRateProtocolMock.sol";
 import "../src/mocks/HundredEmptyMarketRateAttacker.sol";
 import "../src/HundredEmptyMarketRateResponse.sol";
+import "../src/HundredEmptyMarketRateEnvironmentRegistry.sol";
 
 interface VmScript {
     function startBroadcast() external;
@@ -19,20 +20,19 @@ contract DeployHoodiSimulation {
         address protocol;
         address attacker;
         address response;
+        address registry;
     }
-
-    Deployment public deployment;
 
     function run() external returns (Deployment memory out) {
         vm.startBroadcast();
         MockToken token = new MockToken();
-        HundredEmptyMarketRateProtocolMock protocol = new HundredEmptyMarketRateProtocolMock();
+        HundredEmptyMarketRateProtocolMock protocol = new HundredEmptyMarketRateProtocolMock(address(token));
         HundredEmptyMarketRateAttacker attacker = new HundredEmptyMarketRateAttacker(address(protocol));
         HundredEmptyMarketRateResponse response = new HundredEmptyMarketRateResponse();
-        protocol.setToken(address(token));
+        protocol.setEmergencyModule(address(response));
         protocol.seedHealthy(address(attacker));
-        out = Deployment(address(token), address(protocol), address(attacker), address(response));
-        deployment = out;
+        HundredEmptyMarketRateEnvironmentRegistry registry = new HundredEmptyMarketRateEnvironmentRegistry(keccak256("hundred-empty-market-rate-trap-hoodi"), address(protocol), address(response), address(response), true);
+        out = Deployment(address(token), address(protocol), address(attacker), address(response), address(registry));
         vm.stopBroadcast();
     }
 }
